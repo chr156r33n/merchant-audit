@@ -3,17 +3,31 @@ import pandas as pd
 import xml.etree.ElementTree as ET
 from collections import defaultdict
 import re
+from pathlib import Path
 
 # -------------------------------------------------
 # App setup
 # -------------------------------------------------
-st.set_page_config(
-    page_title="Merchant XML Field Utilization",
-    layout="wide"
-)
-
+st.set_page_config(page_title="Merchant XML Field Utilization", layout="wide")
 st.title("Merchant XML Field Utilization PoC")
-st.caption("Upload a merchant XML feed and see which fields are actually used.")
+st.caption("Validates a merchant XML feed against a canonical Google Merchant field list.")
+
+# -------------------------------------------------
+# Load canonical field list
+# -------------------------------------------------
+FIELDS_FILE = Path("fields.txt")
+
+if not FIELDS_FILE.exists():
+    st.error("fields.txt not found in repo root.")
+    st.stop()
+
+canonical_fields = [
+    line.strip()
+    for line in FIELDS_FILE.read_text(encoding="utf-8").splitlines()
+    if line.strip() and not line.strip().startswith("#")
+]
+
+canonical_set = set(canonical_fields)
 
 # -------------------------------------------------
 # Helpers
@@ -25,16 +39,9 @@ def clean_text(v):
         return ""
     return _whitespace.sub(" ", str(v)).strip()
 
-def local_name(tag):
-    if "}" in tag:
-        return tag.split("}", 1)[1]
-    return tag
-
 def build_ns_reverse_map(root):
-    # Best-effort namespace handling
-    ns = {
-        "http://base.google.com/ns/1.0": "g"
-    }
+    # Pre-seed Google Merchant namespace
+    ns = {"http://base.google.com/ns/1.0": "g"}
     for k, v in root.attrib.items():
         if k.startswith("{http://www.w3.org/2000/xmlns/}"):
             ns[v] = k.split("}", 1)[1]
@@ -78,21 +85,21 @@ def find_products(root):
     return []
 
 def pick_product_id(row):
-    for key in [
+    for k in (
         "g:id", "id",
         "g:gtin", "gtin",
         "g:mpn", "mpn",
         "g:title", "title",
-        "link", "g:link"
-    ]:
-        if key in row and row[key]:
-            return row[key][:120]
+        "link", "g:link",
+    ):
+        if k in row and row[k]:
+            return row[k][:120]
     return "(no identifier)"
 
 # -------------------------------------------------
 # UI
 # -------------------------------------------------
-uploaded = st.file_uploader("Upload XML feed", type=["xml"])
+uploaded = st.file_uploader("Upload merchant XML feed", type=["xml"])
 max_products = st.number_input(
     "Max products to process",
     min_value=10,
@@ -119,13 +126,13 @@ products = find_products(root)[: int(max_products)]
 st.write(f"Products parsed: **{len(products)}**")
 
 rows = []
-all_fields = set()
+observed_fields = set()
 
 for p in products:
     flat = flatten_item(p, ns_map)
     flat["_product"] = pick_product_id(flat)
     rows.append(flat)
-    all_fields.update(flat.keys())
+    observed_fields.update(flat.keys())
 
 df = pd.DataFrame(rows)
 df.insert(0, "_product", df.pop("_product"))
@@ -133,36 +140,57 @@ df.insert(0, "_product", df.pop("_product"))
 total = len(df)
 
 # -------------------------------------------------
-# Field utilization summary
+# Canonical utilization summary
 # -------------------------------------------------
 summary = []
 
-for field in sorted([c for c in df.columns if c != "_product"]):
-    series = df[field]
-    present = series.notna()
-    empty = present & (series.astype(str).map(clean_text) == "")
-    non_empty = present & ~empty
-    missing = ~present
+for field in sorted(canonical_fields):
+    if field in df.columns:
+        series = df[field]
+        present = series.notna()
+        empty = present & (series.astype(str).map(clean_text) == "")
+        non_empty = present & ~empty
+        missing = ~present
+    else:
+        non_empty = empty = pd.Series([False] * total)
+        missing = pd.Series([True] * total)
 
     summary.append({
         "field": field,
         "non_empty": int(non_empty.sum()),
         "empty": int(empty.sum()),
         "missing": int(missing.sum()),
-        "utilization_%": round((non_empty.sum() / total) * 100, 2)
+        "utilization_%": round((non_empty.sum() / total) * 100, 2) if total else 0
     })
 
-summary_df = (
-    pd.DataFrame(summary)
-    .sort_values("non_empty", ascending=False)
+summary_df = pd.DataFrame(summary).sort_values(
+    by=["non_empty", "utilization_%"],
+    ascending=False
 )
+
+# -------------------------------------------------
+# Extra (non-canonical) fields
+# -------------------------------------------------
+extra_fields = sorted(observed_fields - canonical_set)
+
+extra_df = pd.DataFrame(
+    [{"field": f, "products_using_field": df[f].notna().sum()} for f in extra_fields]
+).sort_values("products_using_field", ascending=False)
 
 # -------------------------------------------------
 # Field → products pivot
 # -------------------------------------------------
 field_products = []
 
-for field in summary_df["field"]:
+for field in canonical_fields:
+    if field not in df.columns:
+        field_products.append({
+            "field": field,
+            "products_using_field": 0,
+            "sample_products": ""
+        })
+        continue
+
     mask = df[field].notna() & (df[field].astype(str).map(clean_text) != "")
     used = df.loc[mask, "_product"].tolist()
 
@@ -172,15 +200,18 @@ for field in summary_df["field"]:
         "sample_products": ", ".join(used[:10])
     })
 
-field_products_df = (
-    pd.DataFrame(field_products)
-    .sort_values("products_using_field", ascending=False)
+field_products_df = pd.DataFrame(field_products).sort_values(
+    "products_using_field", ascending=False
 )
 
 # -------------------------------------------------
 # Output
 # -------------------------------------------------
-tab1, tab2 = st.tabs(["Field utilization", "Field → products"])
+tab1, tab2, tab3 = st.tabs([
+    "Canonical field utilization",
+    "Field → products",
+    "Extra fields in feed"
+])
 
 with tab1:
     st.dataframe(summary_df, use_container_width=True, height=520)
@@ -194,21 +225,20 @@ with tab1:
 with tab2:
     st.dataframe(field_products_df, use_container_width=True, height=520)
 
-    field = st.selectbox(
-        "Inspect field",
-        field_products_df["field"].tolist()
-    )
+    field = st.selectbox("Inspect field", field_products_df["field"])
+    if field in df.columns:
+        mask = df[field].notna() & (df[field].astype(str).map(clean_text) != "")
+        st.dataframe(
+            df.loc[mask, ["_product"]],
+            use_container_width=True,
+            height=300
+        )
+    else:
+        st.info("Field not present in feed at all.")
 
-    mask = df[field].notna() & (df[field].astype(str).map(clean_text) != "")
-    st.dataframe(
-        df.loc[mask, ["_product"]],
-        use_container_width=True,
-        height=300
-    )
-
-    st.download_button(
-        "Download field → products CSV",
-        field_products_df.to_csv(index=False),
-        "field_products.csv",
-        "text/csv"
-    )
+with tab3:
+    if extra_df.empty:
+        st.success("No non-canonical fields found.")
+    else:
+        st.warning("Fields present in feed but NOT in canonical list")
+        st.dataframe(extra_df, use_container_width=True, height=400)
