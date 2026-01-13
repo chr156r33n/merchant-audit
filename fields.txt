@@ -1,6 +1,7 @@
 # Required basic identifiers
 g:id
 g:title
+g:short_title
 g:description
 g:link
 g:image_link
@@ -35,6 +36,7 @@ g:product_length
 g:product_height
 g:product_width
 g:product_weight
+g:product_highlight
 
 # Shipping (main feed / nested)
 g:shipping.country
