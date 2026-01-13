@@ -1,6 +1,5 @@
-# Core identifiers
+# Required basic identifiers
 g:id
-g:item_group_id
 g:title
 g:description
 g:link
@@ -9,17 +8,60 @@ g:image_link
 # Pricing
 g:price
 g:sale_price
-g:currency
+g:sale_price_effective_date
 
-# Availability
+# Availability & condition
 g:availability
 g:condition
 
-# Shipping
-shipping.country
-shipping.price
-shipping.service
+# Identifiers
+g:brand
+g:gtin
+g:mpn
+g:item_group_id
+
+# Product categorization
+g:google_product_category
+g:product_type
+
+# Additional optional info
+g:color
+g:gender
+g:age_group
+g:material
+g:pattern
+g:size
+g:product_length
+g:product_height
+g:product_width
+g:product_weight
+
+# Shipping (main feed / nested)
+g:shipping.country
+g:shipping.service
+g:shipping.price
+g:shipping.weight
 
 # Tax
-tax.country
-tax.rate
+g:tax.country
+g:tax.rate
+g:tax.shipping
+
+# Additional URLs
+g:additional_image_link
+g:mobile_link
+
+# Offer & inventory details
+g:availability_date
+g:inventory_level
+g:sell_on_google_quantity
+
+# Promotion-related
+g:promotion_id
+
+# Custom labels
+g:custom_label_0
+g:custom_label_1
+g:custom_label_2
+g:custom_label_3
+g:custom_label_4
