@@ -1,0 +1,25 @@
+# Core identifiers
+g:id
+g:item_group_id
+g:title
+g:description
+g:link
+g:image_link
+
+# Pricing
+g:price
+g:sale_price
+g:currency
+
+# Availability
+g:availability
+g:condition
+
+# Shipping
+shipping.country
+shipping.price
+shipping.service
+
+# Tax
+tax.country
+tax.rate
