@@ -168,9 +168,9 @@ def enrich_product_highlight(row, model, prompt_template):
         response = model.generate_content(prompt)
         highlight = clean_highlight_text(response.text)
         
-        return highlight
+        return highlight, prompt
     except Exception as e:
-        return f"Error: {str(e)}"
+        return f"Error: {str(e)}", prompt if 'prompt' in locals() else "Error generating prompt"
 
 # -------------------------------------------------
 # Sidebar - All controls
@@ -279,6 +279,8 @@ if "enrichment_results" not in st.session_state:
     st.session_state.enrichment_results = None
 if "enrichment_df" not in st.session_state:
     st.session_state.enrichment_df = None
+if "enrichment_logs" not in st.session_state:
+    st.session_state.enrichment_logs = []
 
 # -------------------------------------------------
 # Run Enrichment
@@ -295,6 +297,7 @@ if run_enrichment and gemini_api_key:
     status_text = st.empty()
     
     enrichment_results = []
+    enrichment_logs = []
     model_name = get_gemini_model_name(gemini_version, gemini_type)
     
     # Configure API and create model once
@@ -305,18 +308,31 @@ if run_enrichment and gemini_api_key:
         status_text.text(f"Processing product {idx + 1} of {len(products_to_enrich)}")
         progress_bar.progress((idx + 1) / len(products_to_enrich))
         
-        suggested_highlight = enrich_product_highlight(
+        suggested_highlight, prompt = enrich_product_highlight(
             row, model, prompt_template
         )
+        
+        product_id = row.get("g:id", "") or row.get("g:mpn", "") or row.get("g:gtin", "") or f"Product {idx + 1}"
         
         enrichment_results.append({
             "g:mpn": row.get("g:mpn", ""),
             "g:gtin": row.get("g:gtin", ""),
             "g:id": row.get("g:id", ""),
             "g:title": row.get("g:title", ""),
+            "g:short_title": row.get("g:short_title", ""),
             "g:link": row.get("g:link", ""),
             "g:product_highlight": row.get("g:product_highlight", ""),
             "suggested_highlight": suggested_highlight
+        })
+        
+        # Log the request
+        enrichment_logs.append({
+            "product_id": product_id,
+            "product_title": row.get("g:title", ""),
+            "model": model_name,
+            "prompt": prompt,
+            "response": suggested_highlight,
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
         })
         
         # Small delay to avoid rate limiting
@@ -324,6 +340,7 @@ if run_enrichment and gemini_api_key:
     
     st.session_state.enrichment_results = enrichment_results
     st.session_state.enrichment_df = pd.DataFrame(enrichment_results)
+    st.session_state.enrichment_logs = enrichment_logs
     
     progress_bar.empty()
     status_text.empty()
@@ -335,22 +352,59 @@ if run_enrichment and gemini_api_key:
 if st.session_state.enrichment_df is not None:
     st.header("Enrichment Results")
     
-    display_df = st.session_state.enrichment_df.copy()
-    st.dataframe(display_df, use_container_width=True, height=400)
+    # Create tabs for results and logs
+    results_tab, logs_tab = st.tabs(["Results", "Request Logs"])
     
-    # Download button for GMC supplemental feed format
-    gmc_df = st.session_state.enrichment_df[["g:id", "suggested_highlight"]].copy()
-    gmc_df.rename(columns={"suggested_highlight": "g:product_highlight"}, inplace=True)
-    gmc_df = gmc_df[["g:id", "g:product_highlight"]]
+    with results_tab:
+        display_df = st.session_state.enrichment_df.copy()
+        st.dataframe(display_df, use_container_width=True, height=400)
+        
+        # Download button for GMC supplemental feed format
+        gmc_df = st.session_state.enrichment_df[["g:id", "g:short_title", "suggested_highlight"]].copy()
+        gmc_df.rename(columns={"suggested_highlight": "g:product_highlight"}, inplace=True)
+        gmc_df = gmc_df[["g:id", "g:short_title", "g:product_highlight"]]
+        
+        csv_output = gmc_df.to_csv(index=False)
+        st.download_button(
+            "Download GMC Supplemental Feed CSV",
+            csv_output,
+            "gmc_product_highlights.csv",
+            "text/csv",
+            help="This CSV is formatted for Google Merchant Center supplemental feed upload"
+        )
     
-    csv_output = gmc_df.to_csv(index=False)
-    st.download_button(
-        "Download GMC Supplemental Feed CSV",
-        csv_output,
-        "gmc_product_highlights.csv",
-        "text/csv",
-        help="This CSV is formatted for Google Merchant Center supplemental feed upload"
-    )
+    with logs_tab:
+        if st.session_state.enrichment_logs:
+            st.subheader("Gemini API Request Logs")
+            st.caption(f"Total requests: {len(st.session_state.enrichment_logs)}")
+            
+            # Filter/search option
+            search_term = st.text_input("Search logs by product ID or title", key="log_search")
+            
+            # Display logs
+            for idx, log in enumerate(st.session_state.enrichment_logs):
+                # Filter if search term provided
+                if search_term:
+                    if search_term.lower() not in log["product_id"].lower() and search_term.lower() not in log["product_title"].lower():
+                        continue
+                
+                with st.expander(f"Request {idx + 1}: {log['product_id']} - {log['product_title'][:50]}", expanded=False):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.write("**Product ID:**", log["product_id"])
+                        st.write("**Product Title:**", log["product_title"])
+                        st.write("**Model:**", log["model"])
+                    with col2:
+                        st.write("**Timestamp:**", log["timestamp"])
+                    
+                    st.divider()
+                    st.write("**Prompt sent to Gemini:**")
+                    st.code(log["prompt"], language="text")
+                    
+                    st.write("**Response received:**")
+                    st.code(log["response"], language="text")
+        else:
+            st.info("No request logs available. Run enrichment to see logs.")
 
 # -------------------------------------------------
 # Canonical utilization summary
