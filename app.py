@@ -139,38 +139,53 @@ def get_gemini_model_name(version, model_type):
         else:  # fast
             return "gemini-3-flash-preview"  # Gemini 3 Flash (preview)
 
-def enrich_product_highlight(row, model, prompt_template):
-    """Enrich a single product's highlight using Gemini"""
-    try:
-        # Get field values
-        title = row.get("g:title", "")
-        description = row.get("g:description", "")
-        short = row.get("g:short", "")
-        material = row.get("g:material", "")
-        color = row.get("g:color", "")
-        sort_title = row.get("g:sort_title", "")
-        product_type = row.get("g:product_type", "")
-        current_highlight = row.get("g:product_highlight", "")
-        
-        # Format prompt
-        prompt = prompt_template.format(
-            g_title=title or "Not provided",
-            g_description=description or "Not provided",
-            g_short=short or "Not provided",
-            g_material=material or "Not provided",
-            g_color=color or "Not provided",
-            g_sort_title=sort_title or "Not provided",
-            g_product_type=product_type or "Not provided",
-            g_product_highlight=current_highlight or "None"
-        )
-        
-        # Generate response
-        response = model.generate_content(prompt)
-        highlight = clean_highlight_text(response.text)
-        
-        return highlight, prompt
-    except Exception as e:
-        return f"Error: {str(e)}", prompt if 'prompt' in locals() else "Error generating prompt"
+def enrich_product_highlight(row, model, prompt_template, max_retries=3, base_delay=2):
+    """Enrich a single product's highlight using Gemini with retry logic for rate limits"""
+    # Get field values
+    title = row.get("g:title", "")
+    description = row.get("g:description", "")
+    short = row.get("g:short", "")
+    material = row.get("g:material", "")
+    color = row.get("g:color", "")
+    sort_title = row.get("g:sort_title", "")
+    product_type = row.get("g:product_type", "")
+    current_highlight = row.get("g:product_highlight", "")
+    
+    # Format prompt
+    prompt = prompt_template.format(
+        g_title=title or "Not provided",
+        g_description=description or "Not provided",
+        g_short=short or "Not provided",
+        g_material=material or "Not provided",
+        g_color=color or "Not provided",
+        g_sort_title=sort_title or "Not provided",
+        g_product_type=product_type or "Not provided",
+        g_product_highlight=current_highlight or "None"
+    )
+    
+    # Retry logic with exponential backoff
+    for attempt in range(max_retries):
+        try:
+            # Generate response
+            response = model.generate_content(prompt)
+            highlight = clean_highlight_text(response.text)
+            return highlight, prompt
+        except Exception as e:
+            error_str = str(e).lower()
+            # Check if it's a rate limit error (429)
+            if "429" in error_str or "rate limit" in error_str or "quota" in error_str:
+                if attempt < max_retries - 1:
+                    # Exponential backoff: 2s, 4s, 8s
+                    delay = base_delay * (2 ** attempt)
+                    time.sleep(delay)
+                    continue
+                else:
+                    return f"Error: Rate limit exceeded after {max_retries} retries. Please wait and try again later.", prompt
+            else:
+                # For other errors, return immediately
+                return f"Error: {str(e)}", prompt
+    
+    return f"Error: Failed after {max_retries} retries", prompt
 
 # -------------------------------------------------
 # Sidebar - All controls
@@ -229,6 +244,15 @@ with st.sidebar:
     if gemini_api_key:
         model_name = get_gemini_model_name(gemini_version, gemini_type)
         st.info(f"Using model: {model_name}")
+    
+    request_delay = st.slider(
+        "Delay between requests (seconds)",
+        min_value=0.1,
+        max_value=5.0,
+        value=0.5,
+        step=0.1,
+        help="Increase this if you're experiencing rate limit errors (429). Higher values = slower but more reliable."
+    )
     
     st.divider()
     st.header("Enrichment Actions")
@@ -314,6 +338,11 @@ if run_enrichment and gemini_api_key:
         
         product_id = row.get("g:id", "") or row.get("g:mpn", "") or row.get("g:gtin", "") or f"Product {idx + 1}"
         
+        # Check if we got a rate limit error
+        if suggested_highlight.startswith("Error: Rate limit"):
+            st.warning(f"Rate limit hit at product {idx + 1}. Waiting longer before continuing...")
+            time.sleep(10)  # Wait 10 seconds before continuing
+        
         enrichment_results.append({
             "g:mpn": row.get("g:mpn", ""),
             "g:gtin": row.get("g:gtin", ""),
@@ -335,8 +364,9 @@ if run_enrichment and gemini_api_key:
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
         })
         
-        # Small delay to avoid rate limiting
-        time.sleep(0.1)
+        # Delay between requests (configurable)
+        if idx < len(products_to_enrich) - 1:  # Don't delay after last request
+            time.sleep(request_delay)
     
     st.session_state.enrichment_results = enrichment_results
     st.session_state.enrichment_df = pd.DataFrame(enrichment_results)
