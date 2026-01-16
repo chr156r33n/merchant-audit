@@ -48,11 +48,18 @@ INCORPORATING EXISTING HIGHLIGHTS:
 - The final output should combine existing highlights with new ones in a cohesive set
 
 KEY DETAILS TO INCLUDE (when available in product data):
-- Dimensions, weight, capacity, compatibility information
+- Dimensions, weight, capacity, compatibility information (when they add meaningful value)
 - Battery life, warranty information (if mentioned)
 - Care instructions or maintenance details
 - Included items or accessories
 - Key functional specifications that affect purchase decisions
+
+SIZE AND COLOR GUIDELINES:
+- Only include size information if it adds real value (e.g., "Generous fit" or "Compact design") - avoid mechanical listings like "Size: Medium" or "Available in sizes S-XL"
+- Only include color information if the shade name is meaningful and adds value (e.g., "Rich burgundy hue" or "Classic navy") - avoid generic color names or shade codes that don't convey useful information
+- Express size and color naturally when included, not as mechanical specifications
+- If size/color information is generic or doesn't enhance the highlight, omit it entirely
+- Focus on benefits and features rather than basic attributes that customers can see in the product listing
 
 SEO AND LANGUAGE:
 - Use natural search terms that appear in the product data
@@ -66,8 +73,10 @@ Product highlights should:
 - Focus on what makes the product special or valuable to customers based solely on the provided information
 - Avoid generic statements that could apply to any product
 - Use active voice and compelling language
-- Only reference facts, features, materials, colors, dimensions, or details that are explicitly mentioned in the product fields
+- Only reference facts, features, materials, or details that are explicitly mentioned in the product fields
+- Be selective about including size/color - only when they add meaningful value, not as mechanical specifications
 - Each highlight should be distinct and add value
 - Be specific and measurable rather than vague
+- Prioritize benefits and unique features over basic attributes like generic size or color names
 
 Only create highlights if the product has sufficient information to create meaningful, specific highlights using only the provided data. If the product information is too generic or insufficient, return an empty string.

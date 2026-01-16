@@ -26,9 +26,13 @@ REQUIREMENTS:
 7. Each highlight should be concise (maximum 150 characters per line) - use short phrases or sentence fragments
 8. Prioritize the most important information first (USPs, key specs, primary features)
 9. When possible, map features to benefits (only if clearly supported by the data)
-10. Include key logistical details when available (dimensions, compatibility, care instructions, included items)
+10. Include key logistical details when available (dimensions, compatibility, care instructions, included items) - but be selective
 11. Avoid vague adjectives like "high quality" or "premium" unless explicitly stated in the data
 12. Use specific, measurable attributes from the product data
+13. Be selective about size/color: Only include size if it adds value (e.g., "Generous fit") - avoid mechanical listings like "Size: Medium"
+14. Only include color if the shade name is meaningful (e.g., "Rich burgundy") - avoid generic color names or codes
+15. Express size/color naturally when included, not as mechanical specifications
+16. If size/color information is generic or doesn't enhance the highlight, omit it entirely
 13. Each highlight should be compelling and specific to this product
 14. Highlights should focus on unique features or benefits explicitly mentioned in the product data
 15. Written in an engaging, customer-focused tone
