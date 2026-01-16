@@ -192,7 +192,7 @@ with st.sidebar:
     
     enrichment_field = st.selectbox(
         "Field to Enrich",
-        options=["product highlight", "product title", "product description"],
+        options=["product highlight (g:product_highlight)", "product title (g:title)", "product description (g:description)"],
         index=0,
         help="Select which field to enrich"
     )
