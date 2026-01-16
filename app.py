@@ -55,6 +55,20 @@ def clean_text(v):
         return ""
     return _whitespace.sub(" ", str(v)).strip()
 
+def clean_highlight_text(v):
+    """Clean text while preserving line breaks for multi-line highlights"""
+    if v is None:
+        return ""
+    # Preserve newlines but clean up excessive whitespace
+    text = str(v)
+    # Replace multiple spaces with single space (but keep newlines)
+    text = re.sub(r'[ \t]+', ' ', text)
+    # Replace multiple newlines with single newline
+    text = re.sub(r'\n\s*\n+', '\n', text)
+    # Strip leading/trailing whitespace from each line and overall
+    lines = [line.strip() for line in text.split('\n') if line.strip()]
+    return '\n'.join(lines)
+
 def build_ns_reverse_map(root):
     # Pre-seed Google Merchant namespace
     ns = {"http://base.google.com/ns/1.0": "g"}
@@ -152,7 +166,7 @@ def enrich_product_highlight(row, model, prompt_template):
         
         # Generate response
         response = model.generate_content(prompt)
-        highlight = clean_text(response.text)
+        highlight = clean_highlight_text(response.text)
         
         return highlight
     except Exception as e:

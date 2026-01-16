@@ -1,4 +1,4 @@
-Based on the following product information, create a compelling product highlight for Google Merchant Center.
+Based on the following product information, create compelling product highlights for Google Merchant Center.
 
 IMPORTANT: You must ONLY use the information provided below. Do not use any external knowledge, training data, or make assumptions beyond what is explicitly stated.
 
@@ -11,17 +11,29 @@ Product Information:
 - Sort Title: {g_sort_title}
 - Product Type: {g_product_type}
 
-Current Product Highlight (if any): {g_product_highlight}
+Current Product Highlights (if any): {g_product_highlight}
 
-Create a new product highlight that is:
-- Concise (maximum 150 characters)
-- Compelling and specific to this product
-- Highlights unique features or benefits that are explicitly mentioned in the product data above
-- Written in an engaging, customer-focused tone
-- Based ONLY on the facts provided in the product information fields
-- Does not include any information not present in the provided fields
+REQUIREMENTS:
+1. If there are existing product highlights above, you MUST incorporate them into your response
+2. Review the existing highlights and ensure they are included in your output
+3. Add NEW highlights that complement the existing ones without heavy overlap
+4. Avoid creating highlights that duplicate or heavily overlap with existing ones
+5. Focus new highlights on different features or benefits not already covered
+6. Format: One highlight per line, separated by line breaks (ready for bullet point use, but without bullet symbols)
+7. Each highlight should be concise (maximum 150 characters per line) - use short phrases or sentence fragments
+8. Prioritize the most important information first (USPs, key specs, primary features)
+9. When possible, map features to benefits (only if clearly supported by the data)
+10. Include key logistical details when available (dimensions, compatibility, care instructions, included items)
+11. Avoid vague adjectives like "high quality" or "premium" unless explicitly stated in the data
+12. Use specific, measurable attributes from the product data
+13. Each highlight should be compelling and specific to this product
+14. Highlights should focus on unique features or benefits explicitly mentioned in the product data
+15. Written in an engaging, customer-focused tone
+16. Based ONLY on the facts provided in the product information fields
+17. Does not include any information not present in the provided fields
+18. Use natural search terms that appear in the data (avoid keyword stuffing)
+19. Maintain consistent formatting and tone
 
-If the product information is insufficient to create a meaningful highlight using only the provided data, return an empty string.
+If the product information is insufficient to create meaningful highlights using only the provided data, return an empty string.
 
-Product Highlight:
-
+Product Highlights (one per line, incorporating existing ones and adding new complementary ones, ordered by importance):
