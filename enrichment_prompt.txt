@@ -1,0 +1,27 @@
+Based on the following product information, create a compelling product highlight for Google Merchant Center.
+
+IMPORTANT: You must ONLY use the information provided below. Do not use any external knowledge, training data, or make assumptions beyond what is explicitly stated.
+
+Product Information:
+- Title: {g_title}
+- Description: {g_description}
+- Short Description: {g_short}
+- Material: {g_material}
+- Color: {g_color}
+- Sort Title: {g_sort_title}
+- Product Type: {g_product_type}
+
+Current Product Highlight (if any): {g_product_highlight}
+
+Create a new product highlight that is:
+- Concise (maximum 150 characters)
+- Compelling and specific to this product
+- Highlights unique features or benefits that are explicitly mentioned in the product data above
+- Written in an engaging, customer-focused tone
+- Based ONLY on the facts provided in the product information fields
+- Does not include any information not present in the provided fields
+
+If the product information is insufficient to create a meaningful highlight using only the provided data, return an empty string.
+
+Product Highlight:
+
