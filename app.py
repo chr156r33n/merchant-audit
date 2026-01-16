@@ -135,9 +135,9 @@ def get_gemini_model_name(version, model_type):
             return "gemini-2.0-flash-exp"  # Using experimental model for 2.5 fast
     else:  # version 3
         if model_type == "pro":
-            return "gemini-1.5-pro"
+            return "gemini-3-pro-preview"  # Gemini 3 Pro (preview)
         else:  # fast
-            return "gemini-1.5-flash"
+            return "gemini-3-flash-preview"  # Gemini 3 Flash (preview)
 
 def enrich_product_highlight(row, model, prompt_template):
     """Enrich a single product's highlight using Gemini"""
@@ -189,6 +189,24 @@ with st.sidebar:
     
     st.divider()
     st.header("Enrichment Settings")
+    
+    enrichment_field = st.selectbox(
+        "Field to Enrich",
+        options=["product highlight", "product title", "product description"],
+        index=0,
+        help="Select which field to enrich"
+    )
+    
+    # Show status indicators
+    st.markdown("**Status:**")
+    st.caption("✓ Product highlight - Available")
+    st.caption("⊘ Product title - Coming soon", help="This feature will be available in a future update")
+    st.caption("⊘ Product description - Coming soon", help="This feature will be available in a future update")
+    
+    # Prevent selection of coming soon options
+    if enrichment_field in ["product title", "product description"]:
+        st.warning(f"⚠️ {enrichment_field.title()} enrichment is coming soon. Using 'product highlight' instead.")
+        enrichment_field = "product highlight"  # Force to product highlight
     
     gemini_api_key = st.text_input(
         "Gemini API Key",
