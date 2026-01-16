@@ -1,5 +1,8 @@
 Based on the following product information, create compelling product highlights for Google Merchant Center.
 
+WHAT ARE PRODUCT HIGHLIGHTS:
+Product highlights are short, punchy benefits that show up in Google Shopping results and drive higher CTR (click-through rate). They appear as bullet points in search listings and help customers quickly understand key product benefits and features.
+
 IMPORTANT: You must ONLY use the information provided below. Do not use any external knowledge, training data, or make assumptions beyond what is explicitly stated.
 
 Product Information:
@@ -35,5 +38,11 @@ REQUIREMENTS:
 19. Maintain consistent formatting and tone
 
 If the product information is insufficient to create meaningful highlights using only the provided data, return an empty string.
+
+EXAMPLE OF GOOD PRODUCT HIGHLIGHTS FORMAT:
+Nutrient-powered hydration with organic pomegranate oil
+Lightweight formula for fine to medium hair
+98% naturally derived; silicone-free
+Vegan and cruelty free
 
 Product Highlights (one per line, incorporating existing ones and adding new complementary ones, ordered by importance):

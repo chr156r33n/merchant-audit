@@ -180,11 +180,11 @@ with st.sidebar:
     
     uploaded = st.file_uploader("Upload merchant XML feed", type=["xml"])
     max_products = st.number_input(
-        "Max products to process",
-        min_value=10,
+        "Max products to process (includes enrichment)",
+        min_value=5,
         max_value=200000,
-        value=5000,
-        step=500
+        value=10,
+        step=5
     )
     
     st.divider()
