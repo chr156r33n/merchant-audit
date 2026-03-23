@@ -106,12 +106,26 @@ def flatten_item(item, ns_map):
     return {k: " | ".join(set(v)) for k, v in out.items()}
 
 def find_products(root):
+    # RSS-style feeds
     items = root.findall(".//item")
     if items:
         return items
+
+    # Atom-style feeds
     entries = root.findall(".//entry")
     if entries:
         return entries
+
+    # Generic product feeds
+    products = root.findall(".//product")
+    if products:
+        return products
+
+    # Namespaced generic product feeds (e.g. ns:product)
+    ns_products = root.findall(".//{*}product")
+    if ns_products:
+        return ns_products
+
     return []
 
 def pick_product_id(row):
@@ -294,7 +308,11 @@ for p in products:
     observed_fields.update(flat.keys())
 
 df = pd.DataFrame(rows)
-df.insert(0, "_product", df.pop("_product"))
+if "_product" in df.columns:
+    df.insert(0, "_product", df.pop("_product"))
+else:
+    # Keep downstream logic stable even when no product rows were parsed.
+    df.insert(0, "_product", "")
 
 total = len(df)
 
