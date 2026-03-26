@@ -144,14 +144,14 @@ def get_gemini_model_name(version, model_type):
     """Get Gemini model name based on version and type selection"""
     if version == "2.5":
         if model_type == "pro":
-            return "gemini-2.0-flash-exp"  # Using experimental model for 2.5 pro
+            return "gemini-2.5-flash-exp"  
         else:  # fast
-            return "gemini-2.0-flash-exp"  # Using experimental model for 2.5 fast
+            return "gemini-2.5-flash-exp"  
     else:  # version 3
         if model_type == "pro":
-            return "gemini-3-pro-preview"  # Gemini 3 Pro (preview)
+            return "gemini-3.1-pro-preview"  
         else:  # fast
-            return "gemini-3-flash-preview"  # Gemini 3 Flash (preview)
+            return "gemini-2.5-flash-exp"  
 
 def enrich_product_highlight(row, model, prompt_template, max_retries=3, base_delay=2):
     """Enrich a single product's highlight using Gemini with retry logic for rate limits"""
