@@ -196,13 +196,15 @@ def enrich_product_highlight(row, model, prompt_template, max_retries=3, base_de
             response = model.generate_content(prompt)
             response_text, finish_reason = extract_gemini_text(response)
             if not response_text:
+                debug_info = build_gemini_debug_info(response)
                 return (
                     f"Error: Gemini returned no text content (finish_reason={finish_reason}). "
                     "Try a different model or adjust the prompt.",
-                    prompt
+                    prompt,
+                    debug_info
                 )
             highlight = clean_highlight_text(response_text)
-            return highlight, prompt
+            return highlight, prompt, None
         except Exception as e:
             error_str = str(e).lower()
             # Check if it's a rate limit error (429)
@@ -213,12 +215,16 @@ def enrich_product_highlight(row, model, prompt_template, max_retries=3, base_de
                     time.sleep(delay)
                     continue
                 else:
-                    return f"Error: Rate limit exceeded after {max_retries} retries. Please wait and try again later.", prompt
+                    return (
+                        f"Error: Rate limit exceeded after {max_retries} retries. Please wait and try again later.",
+                        prompt,
+                        None
+                    )
             else:
                 # For other errors, return immediately
-                return f"Error: {str(e)}", prompt
+                return f"Error: {str(e)}", prompt, None
     
-    return f"Error: Failed after {max_retries} retries", prompt
+    return f"Error: Failed after {max_retries} retries", prompt, None
 
 def extract_gemini_text(response):
     """Safely extract text from Gemini response candidates/parts."""
@@ -244,6 +250,31 @@ def extract_gemini_text(response):
     if candidates:
         finish_reason = getattr(candidates[0], "finish_reason", None)
     return None, finish_reason
+
+def build_gemini_debug_info(response):
+    """Collect debug info when Gemini returns no text content."""
+    debug = {
+        "finish_reason": None,
+        "safety_ratings": None,
+        "response_preview": None,
+    }
+    candidates = getattr(response, "candidates", None) or []
+    if candidates:
+        first_candidate = candidates[0]
+        debug["finish_reason"] = getattr(first_candidate, "finish_reason", None)
+        safety = getattr(first_candidate, "safety_ratings", None)
+        if safety:
+            debug["safety_ratings"] = str(safety)
+
+    try:
+        if hasattr(response, "to_dict"):
+            debug["response_preview"] = str(response.to_dict())[:4000]
+        else:
+            debug["response_preview"] = str(response)[:4000]
+    except Exception as e:
+        debug["response_preview"] = f"<unable to serialize response: {e}>"
+
+    return debug
 
 # -------------------------------------------------
 # Sidebar - All controls
@@ -391,7 +422,7 @@ if run_enrichment and gemini_api_key and available_models:
         status_text.text(f"Processing product {idx + 1} of {len(products_to_enrich)}")
         progress_bar.progress((idx + 1) / len(products_to_enrich))
         
-        suggested_highlight, prompt = enrich_product_highlight(
+        suggested_highlight, prompt, response_debug = enrich_product_highlight(
             row, model, prompt_template
         )
         
@@ -420,6 +451,9 @@ if run_enrichment and gemini_api_key and available_models:
             "model": model_name,
             "prompt": prompt,
             "response": suggested_highlight,
+            "finish_reason": response_debug["finish_reason"] if response_debug else None,
+            "safety_ratings": response_debug["safety_ratings"] if response_debug else None,
+            "response_preview": response_debug["response_preview"] if response_debug else None,
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
         })
         
@@ -492,6 +526,15 @@ if st.session_state.enrichment_df is not None:
                     
                     st.write("**Response received:**")
                     st.code(log["response"], language="text")
+                    
+                    if log.get("response_preview"):
+                        st.divider()
+                        st.write("**Debug (no-text response):**")
+                        st.write("**Finish reason:**", log.get("finish_reason"))
+                        if log.get("safety_ratings"):
+                            st.write("**Safety ratings:**", log.get("safety_ratings"))
+                        st.write("**Raw response preview:**")
+                        st.code(log.get("response_preview"), language="json")
         else:
             st.info("No request logs available. Run enrichment to see logs.")
 
