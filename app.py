@@ -1,21 +1,24 @@
-# Updated app.py
-
-# This file replaces hardcoded Gemini model selection with dynamic model listing from the API.
-
-# Function to fetch available Gemini models
 import requests
+from flask import Flask, render_template, request
 
-def get_available_gemini_models():
-    response = requests.get('API_URL_TO_FETCH_MODELS')  # Replace with the actual API URL
-    if response.status_code == 200:
-        return response.json()  # Assuming the response contains a list of models
-    return []  # Return an empty list on error
+app = Flask(__name__)
 
-# Updating the sidebar selectbox for models
-sidebar_model_selectbox = st.selectbox('Select a Gemini Model', get_available_gemini_models())  # This will fetch the models dynamically
+# Restore stable version from 3 days ago
 
-# Example enrichment logic
-selected_model = sidebar_model_selectbox
-# Logic for enrichment using the selected_model directly
+# Configuration
+GEMINI_API_URL = 'https://api.gemini.com/v1/models'
 
-# Further code...
+@app.route('/')
+def index():
+    api_key = request.args.get('api_key')
+    models = []
+    
+    if api_key:
+        response = requests.get(GEMINI_API_URL, headers={'Authorization': f'Bearer {api_key}'})
+        if response.status_code == 200:
+            models = response.json().get('models', [])
+
+    return render_template('index.html', models=models)
+
+if __name__ == '__main__':
+    app.run(debug=True)
