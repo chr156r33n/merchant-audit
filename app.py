@@ -146,12 +146,12 @@ def get_gemini_model_name(version, model_type):
         if model_type == "pro":
             return "gemini-2.5-flash-exp"  
         else:  # fast
-            return "gemini-2.5-flash-exp"  
+            return "gemini-2.5-flash-lite"  
     else:  # version 3
         if model_type == "pro":
             return "gemini-3.1-pro-preview"  
         else:  # fast
-            return "gemini-2.5-flash-exp"  
+            return "gemini-3-flash-preview"  
 
 def enrich_product_highlight(row, model, prompt_template, max_retries=3, base_delay=2):
     """Enrich a single product's highlight using Gemini with retry logic for rate limits"""
