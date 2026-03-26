@@ -194,7 +194,14 @@ def enrich_product_highlight(row, model, prompt_template, max_retries=3, base_de
         try:
             # Generate response
             response = model.generate_content(prompt)
-            highlight = clean_highlight_text(response.text)
+            response_text, finish_reason = extract_gemini_text(response)
+            if not response_text:
+                return (
+                    f"Error: Gemini returned no text content (finish_reason={finish_reason}). "
+                    "Try a different model or adjust the prompt.",
+                    prompt
+                )
+            highlight = clean_highlight_text(response_text)
             return highlight, prompt
         except Exception as e:
             error_str = str(e).lower()
@@ -212,6 +219,31 @@ def enrich_product_highlight(row, model, prompt_template, max_retries=3, base_de
                 return f"Error: {str(e)}", prompt
     
     return f"Error: Failed after {max_retries} retries", prompt
+
+def extract_gemini_text(response):
+    """Safely extract text from Gemini response candidates/parts."""
+    # First try the convenience accessor if available.
+    try:
+        text = getattr(response, "text", None)
+        if text:
+            return str(text), None
+    except Exception:
+        # Fall back to manual parsing below.
+        pass
+
+    candidates = getattr(response, "candidates", None) or []
+    for candidate in candidates:
+        content = getattr(candidate, "content", None)
+        parts = getattr(content, "parts", None) or []
+        for part in parts:
+            part_text = getattr(part, "text", None)
+            if part_text:
+                return str(part_text), None
+
+    finish_reason = None
+    if candidates:
+        finish_reason = getattr(candidates[0], "finish_reason", None)
+    return None, finish_reason
 
 # -------------------------------------------------
 # Sidebar - All controls
