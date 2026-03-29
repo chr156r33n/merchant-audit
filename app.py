@@ -1,3 +1,4 @@
+import io
 import streamlit as st
 import pandas as pd
 import xml.etree.ElementTree as ET
@@ -7,12 +8,19 @@ from pathlib import Path
 import google.generativeai as genai
 import time
 
+ATOM_NS = "http://www.w3.org/2005/Atom"
+GMC_NS = "http://base.google.com/ns/1.0"
+CNS_NS = "http://base.google.com/cns/1.0"
+
 # -------------------------------------------------
 # App setup
 # -------------------------------------------------
 st.set_page_config(page_title="Merchant XML Field Utilization", layout="wide")
 st.title("Merchant XML Field Utilization PoC")
-st.caption("Validates a merchant XML feed against a canonical Google Merchant field list.")
+st.caption(
+    "Accepts Google Merchant Center product feeds: RSS 2.0 XML, Atom 1.0 XML, or tab-delimited .txt/.tsv. "
+    "Validates against a canonical Google Merchant field list."
+)
 
 # -------------------------------------------------
 # Load canonical field list and prompts
@@ -70,11 +78,15 @@ def clean_highlight_text(v):
     return '\n'.join(lines)
 
 def build_ns_reverse_map(root):
-    # Pre-seed Google Merchant namespace
-    ns = {"http://base.google.com/ns/1.0": "g"}
-    for k, v in root.attrib.items():
-        if k.startswith("{http://www.w3.org/2000/xmlns/}"):
-            ns[v] = k.split("}", 1)[1]
+    """Map namespace URIs to prefixes from the root and all descendants (GMC allows xmlns on nested elements)."""
+    ns = {
+        GMC_NS: "g",
+        CNS_NS: "cns",
+    }
+    for el in [root, *root.iter()]:
+        for k, v in el.attrib.items():
+            if k.startswith("{http://www.w3.org/2000/xmlns/}"):
+                ns[v] = k.split("}", 1)[1]
     return ns
 
 def tag_name(tag, ns_map):
@@ -83,6 +95,21 @@ def tag_name(tag, ns_map):
         prefix = ns_map.get(uri)
         return f"{prefix}:{name}" if prefix else name
     return tag
+
+def _leaf_text_and_attrs(node, ns_map):
+    """Text for a leaf node, including Atom link href and common empty-element patterns."""
+    t = clean_text(node.text)
+    if t:
+        return t
+    if node.tag == f"{{{ATOM_NS}}}link":
+        href = node.get("href")
+        if href:
+            return clean_text(href)
+    if node.tag.endswith("}link") and not t:
+        href = node.get("href")
+        if href:
+            return clean_text(href)
+    return ""
 
 def flatten_item(item, ns_map):
     out = defaultdict(list)
@@ -98,7 +125,8 @@ def flatten_item(item, ns_map):
                 walk(c, new_prefix)
         else:
             field = prefix if prefix else name
-            out[field].append(clean_text(node.text))
+            val = _leaf_text_and_attrs(node, ns_map)
+            out[field].append(val)
 
     for child in list(item):
         walk(child, tag_name(child.tag, ns_map))
@@ -106,25 +134,20 @@ def flatten_item(item, ns_map):
     return {k: " | ".join(set(v)) for k, v in out.items()}
 
 def find_products(root):
-    # RSS-style feeds
-    items = root.findall(".//item")
+    # RSS-style feeds (prefixed or default namespace)
+    items = root.findall(".//item") or root.findall(".//{*}item")
     if items:
         return items
 
     # Atom-style feeds
-    entries = root.findall(".//entry")
+    entries = root.findall(".//entry") or root.findall(".//{*}entry")
     if entries:
         return entries
 
     # Generic product feeds
-    products = root.findall(".//product")
+    products = root.findall(".//product") or root.findall(".//{*}product")
     if products:
         return products
-
-    # Namespaced generic product feeds (e.g. ns:product)
-    ns_products = root.findall(".//{*}product")
-    if ns_products:
-        return ns_products
 
     return []
 
@@ -139,6 +162,95 @@ def pick_product_id(row):
         if k in row and row[k]:
             return row[k][:120]
     return "(no identifier)"
+
+def normalize_header(name):
+    """Strip whitespace and optional bracket notation used in some exports."""
+    s = str(name).strip()
+    if s.startswith("[") and s.endswith("]"):
+        s = s[1:-1].strip()
+    return s
+
+def normalize_gmc_row(flat_dict):
+    """
+    Merge plain RSS/Atom element names, TSV column headers, and cns: attributes
+    into canonical g: keys so one code path handles all valid GMC shapes.
+    """
+    merged = {}
+    for k, v in flat_dict.items():
+        if k == "_product":
+            continue
+        if v is None or (isinstance(v, float) and pd.isna(v)):
+            continue
+        val = clean_text(v)
+        if not val:
+            continue
+        key = normalize_header(k)
+        merged[key] = val
+
+    def set_if_missing(gkey, *candidates):
+        cur = merged.get(gkey)
+        if cur is not None and str(cur).strip() != "":
+            return
+        for c in candidates:
+            if c in merged and merged[c] is not None and str(merged[c]).strip() != "":
+                merged[gkey] = merged[c]
+                return
+
+    for field in canonical_fields:
+        if not field.startswith("g:"):
+            continue
+        plain = field[2:]
+        set_if_missing(field, plain)
+
+    set_if_missing("g:id", "id")
+    set_if_missing("g:title", "title")
+    set_if_missing("g:description", "description", "summary", "content")
+    set_if_missing("g:link", "link")
+    set_if_missing("g:image_link", "image_link")
+    set_if_missing("g:additional_image_link", "additional_image_link")
+    set_if_missing("g:mobile_link", "mobile_link")
+    set_if_missing("g:short_title", "short_title")
+    set_if_missing("g:product_type", "product_type")
+    set_if_missing("g:product_highlight", "product_highlight")
+
+    for k in list(merged.keys()):
+        if k.startswith("cns:"):
+            rest = k[4:]
+            gkey = f"g:{rest}"
+            if gkey in canonical_set:
+                set_if_missing(gkey, k)
+
+    return merged
+
+def detect_feed_format(raw: bytes) -> str:
+    """Sniff XML (RSS/Atom) vs tab-delimited text."""
+    s = raw
+    if s.startswith(b"\xef\xbb\xbf"):
+        s = s[3:]
+    head = s[: min(800, len(s))].lstrip().lower()
+    if (
+        head.startswith(b"<?xml")
+        or head.startswith(b"<rss")
+        or head.startswith(b"<feed")
+        or head.startswith(b"<rdf")
+        or head.startswith(b"<channel")
+    ):
+        return "xml"
+    return "tabular"
+
+def parse_tab_delimited(raw: bytes) -> pd.DataFrame:
+    """Parse Merchant Center tab-delimited .txt / .tsv (comma fallback if a single column)."""
+    text = raw.decode("utf-8-sig")
+    df_tab = pd.read_csv(io.StringIO(text), sep="\t", dtype=str, keep_default_na=False)
+    if df_tab.shape[1] > 1:
+        df_tab.columns = [normalize_header(c) for c in df_tab.columns]
+        return df_tab
+    df_comma = pd.read_csv(io.StringIO(text), sep=",", dtype=str, keep_default_na=False)
+    if df_comma.shape[1] > 1:
+        df_comma.columns = [normalize_header(c) for c in df_comma.columns]
+        return df_comma
+    df_tab.columns = [normalize_header(c) for c in df_tab.columns]
+    return df_tab
 
 @st.cache_data(ttl=300)
 def fetch_gemini_models(api_key):
@@ -167,9 +279,14 @@ def fetch_gemini_models(api_key):
 
 def enrich_product_highlight(row, model, prompt_template, max_retries=3, base_delay=2):
     """Enrich a single product's highlight using Gemini with retry logic for rate limits"""
-    # Get field values
-    title = row.get("g:title", "")
-    description = row.get("g:description", "")
+    # Get field values (g: keys plus plain RSS/Atom/TSV aliases after normalize)
+    title = row.get("g:title", "") or row.get("title", "")
+    description = (
+        row.get("g:description", "")
+        or row.get("description", "")
+        or row.get("summary", "")
+        or row.get("content", "")
+    )
     short = row.get("g:short", "")
     material = row.get("g:material", "")
     color = row.get("g:color", "")
@@ -282,7 +399,11 @@ def build_gemini_debug_info(response):
 with st.sidebar:
     st.header("Configuration")
     
-    uploaded = st.file_uploader("Upload merchant XML feed", type=["xml"])
+    uploaded = st.file_uploader(
+        "Upload merchant product feed",
+        type=["xml", "txt", "tsv"],
+        help="RSS 2.0 or Atom 1.0 XML, or tab-delimited .txt / .tsv as in Merchant Center.",
+    )
     max_products = st.number_input(
         "Max products to process (includes enrichment)",
         min_value=5,
@@ -353,31 +474,54 @@ with st.sidebar:
 # Main content area
 # -------------------------------------------------
 if not uploaded:
-    st.info("Please upload an XML feed using the sidebar.")
+    st.info("Please upload a product feed using the sidebar (XML or tab-delimited .txt/.tsv).")
     st.stop()
 
 # -------------------------------------------------
-# Parse XML
+# Parse feed (XML RSS/Atom or tab-delimited)
 # -------------------------------------------------
-try:
-    root = ET.fromstring(uploaded.read())
-except Exception as e:
-    st.error(f"XML parsing failed: {e}")
-    st.stop()
-
-ns_map = build_ns_reverse_map(root)
-products = find_products(root)[: int(max_products)]
-
-st.write(f"Products parsed: **{len(products)}**")
+raw = uploaded.getvalue()
+feed_kind = detect_feed_format(raw)
 
 rows = []
 observed_fields = set()
 
-for p in products:
-    flat = flatten_item(p, ns_map)
-    flat["_product"] = pick_product_id(flat)
-    rows.append(flat)
-    observed_fields.update(flat.keys())
+if feed_kind == "xml":
+    raw_xml = raw[3:] if raw.startswith(b"\xef\xbb\xbf") else raw
+    try:
+        root = ET.fromstring(raw_xml)
+    except Exception as e:
+        st.error(f"XML parsing failed: {e}")
+        st.stop()
+    ns_map = build_ns_reverse_map(root)
+    products = find_products(root)[: int(max_products)]
+    st.write(f"Detected: **XML** · Product records: **{len(products)}**")
+    for p in products:
+        flat = flatten_item(p, ns_map)
+        merged = normalize_gmc_row(flat)
+        merged["_product"] = pick_product_id(merged)
+        rows.append(merged)
+        observed_fields.update(merged.keys())
+else:
+    try:
+        tdf = parse_tab_delimited(raw)
+    except Exception as e:
+        st.error(f"Tab-delimited feed parsing failed: {e}")
+        st.stop()
+    tdf = tdf.head(int(max_products))
+    st.write(f"Detected: **Tab-delimited** · Rows: **{len(tdf)}**")
+    for _, r in tdf.iterrows():
+        merged = normalize_gmc_row(r.to_dict())
+        merged["_product"] = pick_product_id(merged)
+        rows.append(merged)
+        observed_fields.update(merged.keys())
+
+if not rows:
+    st.warning(
+        "No product rows were found. For XML, expected `<item>` (RSS), `<entry>` (Atom), or `<product>`; "
+        "for tab-delimited files, check the header row matches Merchant Center attributes."
+    )
+    st.stop()
 
 df = pd.DataFrame(rows)
 if "_product" in df.columns:
@@ -426,7 +570,13 @@ if run_enrichment and gemini_api_key and available_models:
             row, model, prompt_template
         )
         
-        product_id = row.get("g:id", "") or row.get("g:mpn", "") or row.get("g:gtin", "") or f"Product {idx + 1}"
+        product_id = (
+            row.get("g:id", "")
+            or row.get("id", "")
+            or row.get("g:mpn", "")
+            or row.get("g:gtin", "")
+            or f"Product {idx + 1}"
+        )
         
         # Check if we got a rate limit error
         if suggested_highlight.startswith("Error: Rate limit"):
@@ -436,10 +586,10 @@ if run_enrichment and gemini_api_key and available_models:
         enrichment_results.append({
             "g:mpn": row.get("g:mpn", ""),
             "g:gtin": row.get("g:gtin", ""),
-            "g:id": row.get("g:id", ""),
-            "g:title": row.get("g:title", ""),
+            "g:id": row.get("g:id", "") or row.get("id", ""),
+            "g:title": row.get("g:title", "") or row.get("title", ""),
             "g:short_title": row.get("g:short_title", ""),
-            "g:link": row.get("g:link", ""),
+            "g:link": row.get("g:link", "") or row.get("link", ""),
             "g:product_highlight": row.get("g:product_highlight", ""),
             "suggested_highlight": suggested_highlight
         })
@@ -447,7 +597,7 @@ if run_enrichment and gemini_api_key and available_models:
         # Log the request
         enrichment_logs.append({
             "product_id": product_id,
-            "product_title": row.get("g:title", ""),
+            "product_title": row.get("g:title", "") or row.get("title", ""),
             "model": model_name,
             "prompt": prompt,
             "response": suggested_highlight,
