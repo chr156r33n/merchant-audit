@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:g="http://base.google.com/ns/1.0">
+  <title>Test Atom Feed</title>
+  <link href="https://example.com/feed"/>
+  <updated>2026-01-01T00:00:00Z</updated>
+  <entry>
+    <id>tag:example.com,2026:atom-001</id>
+    <title>Atom Product One</title>
+    <link rel="alternate" href="https://example.com/p1" type="text/html"/>
+    <summary>Summary line for product one.</summary>
+    <g:id>atom-001</g:id>
+    <g:price>15.00 GBP</g:price>
+    <g:condition>new</g:condition>
+  </entry>
+  <entry>
+    <id>tag:example.com,2026:atom-002</id>
+    <title>Atom Product Two</title>
+    <link rel="alternate" href="https://example.com/p2" type="text/html"/>
+    <summary>Summary for two.</summary>
+    <g:id>atom-002</g:id>
+    <g:price>25.00 GBP</g:price>
+    <g:condition>refurbished</g:condition>
+  </entry>
+</feed>

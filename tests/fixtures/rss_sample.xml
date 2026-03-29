@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">
+  <channel>
+    <title>Test RSS</title>
+    <item>
+      <g:id>rss-001</g:id>
+      <title>RSS Product A</title>
+      <description>Description for plain-title RSS item.</description>
+      <link>https://example.com/a</link>
+      <g:price>10.00 GBP</g:price>
+      <g:condition>new</g:condition>
+    </item>
+    <item>
+      <g:id>rss-002</g:id>
+      <g:title>RSS Product B with g:title</g:title>
+      <g:description>Second item uses g: namespace for title.</g:description>
+      <g:link>https://example.com/b</g:link>
+      <g:price>20.00 GBP</g:price>
+      <g:condition>new</g:condition>
+    </item>
+  </channel>
+</rss>

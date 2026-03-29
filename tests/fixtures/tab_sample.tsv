@@ -1,0 +1,4 @@
+id	title	description	link	price	condition
+tsv-001	TSV Widget One	First tab-delimited row	https://example.com/t1	9.99 GBP	new
+tsv-002	TSV Widget Two	Second row	https://example.com/t2	19.99 GBP	new
+tsv-003	TSV Widget Three	Third row	https://example.com/t3	29.99 GBP	used
